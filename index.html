@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXO — AI Software Agent</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #080b0f;
+    --surface:   #0d1117;
+    --panel:     #111820;
+    --border:    rgba(255,255,255,0.07);
+    --border-hi: rgba(0,240,200,0.3);
+    --cyan:      #00f0c8;
+    --violet:    #9f7fff;
+    --amber:     #ffb547;
+    --red:       #ff4f6a;
+    --text:      #e8edf3;
+    --muted:     #556070;
+    --font-ui:   'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    overflow: hidden;
+  }
+
+  /* ── Animated background ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(0,240,200,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 20% 80%, rgba(159,127,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,240,200,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,200,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* ── Layout ── */
+  #app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+  }
+
+  /* ── Topbar ── */
+  #topbar {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    background: rgba(13,17,23,0.95);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.25rem; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--cyan), var(--violet));
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+
+  .logo span { background: linear-gradient(90deg, var(--cyan), var(--violet)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+  .topbar-status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted);
+  }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px var(--cyan); } 50% { opacity: 0.4; box-shadow: none; } }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-head {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+  }
+
+  #history-list {
+    flex: 1; overflow-y: auto; padding: 8px;
+  }
+
+  #history-list::-webkit-scrollbar { width: 4px; }
+  #history-list::-webkit-scrollbar-track { background: transparent; }
+  #history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .history-item {
+    padding: 10px 12px; border-radius: 8px;
+    cursor: pointer; transition: background 0.15s;
+    border: 1px solid transparent;
+    margin-bottom: 4px;
+  }
+
+  .history-item:hover { background: rgba(0,240,200,0.06); border-color: var(--border-hi); }
+  .history-item.active { background: rgba(0,240,200,0.1); border-color: rgba(0,240,200,0.25); }
+
+  .history-prompt {
+    font-size: 0.75rem; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .history-meta {
+    font-family: var(--font-mono); font-size: 0.62rem; color: var(--muted); margin-top: 3px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted);
+  }
+
+  /* ── Main area ── */
+  #main {
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Input section ── */
+  #input-section {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .input-label {
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .input-wrapper {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-wrapper:focus-within {
+    border-color: var(--border-hi);
+    box-shadow: 0 0 0 3px rgba(0,240,200,0.08), inset 0 0 30px rgba(0,240,200,0.03);
+  }
+
+  #prompt-input {
+    width: 100%; min-height: 90px; max-height: 200px;
+    background: transparent;
+    border: none; outline: none; resize: none;
+    padding: 14px 16px 44px;
+    font-family: var(--font-ui); font-size: 0.9rem; color: var(--text);
+    line-height: 1.6;
+  }
+
+  #prompt-input::placeholder { color: var(--muted); }
+
+  .input-bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border);
+  }
+
+  .input-hint { font-size: 0.65rem; color: var(--muted); font-family: var(--font-mono); }
+
+  #generate-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 20px;
+    border: none; border-radius: 8px; cursor: pointer;
+    font-family: var(--font-ui); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.05em;
+    background: linear-gradient(135deg, var(--cyan), #00c8a8);
+    color: #040a08;
+    transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 0 16px rgba(0,240,200,0.3);
+  }
+
+  #generate-btn:hover:not(:disabled) { opacity: 0.92; box-shadow: 0 0 28px rgba(0,240,200,0.5); }
+  #generate-btn:active:not(:disabled) { transform: scale(0.97); }
+  #generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Output area ── */
+  #output-area {
+    flex: 1; display: flex; flex-direction: column;
+    overflow: hidden; padding: 0;
+  }
+
+  /* ── Console ── */
+  #console-wrap {
+    border-bottom: 1px solid var(--border);
+    background: #060a0e;
+    height: 160px; flex-shrink: 0;
+    display: flex; flex-direction: column;
+  }
+
+  .console-head {
+    padding: 8px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .console-title {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .console-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .console-dot.red    { background: #ff5f57; }
+  .console-dot.amber  { background: #ffbd2e; }
+  .console-dot.green  { background: #28c840; }
+
+  #console-log {
+    flex: 1; overflow-y: auto;
+    padding: 10px 16px;
+    font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.8;
+    color: #8fa0b0;
+  }
+
+  #console-log::-webkit-scrollbar { width: 4px; }
+  #console-log::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .log-line { display: flex; gap: 10px; align-items: flex-start; }
+  .log-line.success { color: var(--cyan); }
+  .log-line.error   { color: var(--red); }
+  .log-line.info    { color: #8fa0b0; }
+  .log-ts { color: var(--muted); flex-shrink: 0; }
+
+  /* ── Dual pane output ── */
+  #result-pane {
+    flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+    overflow: hidden;
+    opacity: 0; transition: opacity 0.4s;
+  }
+
+  #result-pane.visible { opacity: 1; }
+
+  /* ── Screenshot pane ── */
+  #screenshot-pane {
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .pane-head {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  #screenshot-container {
+    flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: #050709;
+  }
+
+  #screenshot-img {
+    max-width: 100%; max-height: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    display: none;
+    object-fit: contain;
+  }
+
+  .screenshot-placeholder {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    color: var(--muted); font-size: 0.8rem; text-align: center;
+  }
+
+  .placeholder-icon { font-size: 2.5rem; opacity: 0.4; }
+
+  /* ── Link pane ── */
+  #link-pane {
+    background: var(--panel);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  #link-content {
+    flex: 1; padding: 20px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  .live-url-card {
+    background: linear-gradient(135deg, rgba(0,240,200,0.08), rgba(159,127,255,0.06));
+    border: 1px solid rgba(0,240,200,0.2);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .live-url-label {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--cyan); margin-bottom: 8px;
+  }
+
+  #live-url-display {
+    font-family: var(--font-mono); font-size: 0.8rem; color: var(--text);
+    word-break: break-all; margin-bottom: 12px;
+  }
+
+  .url-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn-open {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 16px; border-radius: 9px;
+    font-family: var(--font-ui); font-size: 0.82rem; font-weight: 700;
+    text-decoration: none; cursor: pointer; border: none;
+    background: linear-gradient(135deg, var(--cyan), #00c0a0);
+    color: #030a07;
+    box-shadow: 0 0 20px rgba(0,240,200,0.3);
+    transition: opacity 0.2s, box-shadow 0.2s;
+  }
+
+  .btn-open:hover { opacity: 0.9; box-shadow: 0 0 32px rgba(0,240,200,0.5); }
+
+  .btn-copy {
+    padding: 10px 14px; border-radius: 9px;
+    font-family: var(--font-ui); font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text);
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .btn-copy:hover { border-color: var(--border-hi); background: rgba(0,240,200,0.05); }
+
+  /* ── Code accordion ── */
+  .code-accordion {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .accordion-toggle {
+    width: 100%; padding: 11px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); cursor: pointer; border: none;
+    font-family: var(--font-ui); font-size: 0.78rem; font-weight: 600; color: var(--text);
+    transition: background 0.15s;
+  }
+
+  .accordion-toggle:hover { background: rgba(255,255,255,0.04); }
+
+  .accordion-arrow { transition: transform 0.25s; font-size: 0.7rem; color: var(--muted); }
+  .accordion-arrow.open { transform: rotate(180deg); }
+
+  #code-body {
+    display: none;
+    max-height: 300px; overflow-y: auto;
+    background: #04080c;
+  }
+
+  #code-body.open { display: block; }
+
+  #code-text {
+    padding: 14px 16px;
+    font-family: var(--font-mono); font-size: 0.67rem;
+    line-height: 1.7; color: #9bb5c8;
+    white-space: pre; overflow-x: auto;
+  }
+
+  /* ── Empty result state ── */
+  #empty-state {
+    grid-column: 1 / -1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; color: var(--muted); padding: 48px;
+    text-align: center;
+  }
+
+  .empty-icon {
+    font-size: 3.5rem; opacity: 0.2;
+    animation: float 4s ease-in-out infinite;
+  }
+
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+  .empty-title { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.15); }
+  .empty-sub   { font-size: 0.78rem; max-width: 300px; line-height: 1.6; }
+
+  /* ── Loading spinner ── */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Scrollbars ── */
+  * { scrollbar-width: thin; scrollbar-color: #1e2a36 transparent; }
+
+  /* ── Notification toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--border-hi);
+    border-radius: 10px; padding: 12px 18px;
+    font-size: 0.78rem; font-family: var(--font-mono);
+    color: var(--cyan); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transform: translateY(20px); opacity: 0;
+    transition: all 0.3s; pointer-events: none; z-index: 999;
+  }
+
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  /* ── Responsive adjustments ── */
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; }
+    #sidebar { display: none; }
+    #result-pane { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div id="app">
+
+  <!-- TOPBAR -->
+  <header id="topbar">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <span>NEXO</span>
+    </div>
+    <div class="topbar-status">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">Agent Ready</span>
+      <span style="margin-left:12px; color:#334055;">|</span>
+      <span id="model-tag" style="margin-left:12px;">llama-3.3-70b-versatile</span>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-head">Project History</div>
+    <div id="history-list">
+      <div style="padding:20px 12px; text-align:center; color:var(--muted); font-size:0.72rem; font-family:var(--font-mono);">
+        No projects yet
+      </div>
+    </div>
+    <div class="sidebar-footer" id="active-count">0 active servers</div>
+  </aside>
+
+  <!-- MAIN -->
+  <main id="main">
+
+    <!-- INPUT -->
+    <section id="input-section">
+      <div class="input-label">✦ What should Nexo build for you?</div>
+      <div class="input-wrapper">
+        <textarea
+          id="prompt-input"
+          placeholder="Describe your application... e.g. &quot;A beautiful multi-functional calculator with history, dark theme, and keyboard support&quot;"
+          spellcheck="false"
+        ></textarea>
+        <div class="input-bar">
+          <span class="input-hint">⌘ + Enter to generate</span>
+          <button id="generate-btn" onclick="startGeneration()">
+            <span id="btn-icon">⚡</span>
+            <span id="btn-text">Generate via Nexo</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OUTPUT -->
+    <div id="output-area">
+
+      <!-- CONSOLE -->
+      <div id="console-wrap">
+        <div class="console-head">
+          <div class="console-title">
+            <div class="console-dot red"></div>
+            <div class="console-dot amber"></div>
+            <div class="console-dot green"></div>
+            <span style="margin-left:6px;">Nexo Agent Console</span>
+          </div>
+          <button onclick="clearConsole()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.7rem;font-family:var(--font-mono);">clear</button>
+        </div>
+        <div id="console-log">
+          <div class="log-line info">
+            <span class="log-ts">00:00:00</span>
+            <span>[Nexo] Agent initialized. Awaiting your prompt...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULT DUAL PANE -->
+      <div id="result-pane">
+
+        <!-- EMPTY STATE -->
+        <div id="empty-state">
+          <div class="empty-icon">🤖</div>
+          <div class="empty-title">No Application Generated Yet</div>
+          <div class="empty-sub">Describe what you want to build above and hit Generate. Nexo will autonomously write the code, run a live server, and capture a screenshot.</div>
+        </div>
+
+      </div><!-- /result-pane -->
+
+    </div><!-- /output-area -->
+
+  </main><!-- /main -->
+
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let isGenerating = false;
+let currentProjectId = null;
+let startTime = null;
+
+// ── Console ────────────────────────────────────────────────────────────────
+function logLine(msg, type = 'info') {
+  const el = document.getElementById('console-log');
+  const now = new Date();
+  const ts  = [now.getHours(), now.getMinutes(), now.getSeconds()]
+               .map(x => String(x).padStart(2, '0')).join(':');
+
+  // Classify by message content
+  if (msg.includes('✅') || msg.includes('🌐') || msg.includes('🖼️') || msg.includes('complete'))
+    type = 'success';
+  else if (msg.includes('❌') || msg.includes('error') || msg.includes('Error'))
+    type = 'error';
+
+  const line = document.createElement('div');
+  line.className = `log-line ${type}`;
+  line.innerHTML = `<span class="log-ts">${ts}</span><span>${escHtml(msg)}</span>`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearConsole() {
+  document.getElementById('console-log').innerHTML = '';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Generate ───────────────────────────────────────────────────────────────
+async function startGeneration() {
+  if (isGenerating) return;
+
+  const prompt = document.getElementById('prompt-input').value.trim();
+  if (!prompt) {
+    showToast('⚠ Please enter a prompt first.');
+    return;
+  }
+
+  isGenerating = true;
+  startTime = Date.now();
+  setBtnState(true);
+  setStatus('Generating...', true);
+  hideResultPane();
+
+  logLine('──────────────────────────────────');
+  logLine(`[Nexo] 📝 Prompt: "${prompt.slice(0, 80)}${prompt.length > 80 ? '...' : ''}"`);
+
+  try {
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.body) throw new Error('No stream body');
+
+    const reader   = res.body.getReader();
+    const decoder  = new TextDecoder();
+    let buffer     = '';
+    let projectId  = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const msg = line.slice(6).trim();
+        if (!msg) continue;
+
+        if (msg.startsWith('__DONE__')) {
+          projectId = msg.replace('__DONE__', '');
+          currentProjectId = projectId;
+          await loadProjectResult(projectId);
+          addToHistory(projectId, prompt);
+        } else if (msg === '__ERROR__') {
+          logLine('[Nexo] Pipeline failed.', 'error');
+        } else {
+          logLine(msg);
+        }
+      }
+    }
+
+  } catch (err) {
+    logLine(`[Nexo] ❌ Connection error: ${err.message}`, 'error');
+  }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  logLine(`[Nexo] ⏱ Total time: ${elapsed}s`);
+  isGenerating = false;
+  setBtnState(false);
+  setStatus('Agent Ready', false);
+}
+
+// ── Load project result ────────────────────────────────────────────────────
+async function loadProjectResult(projectId) {
+  try {
+    const res  = await fetch(`/project/${projectId}`);
+    const data = await res.json();
+    renderResult(data, projectId);
+  } catch (e) {
+    logLine(`[Nexo] Failed to load project data: ${e.message}`, 'error');
+  }
+}
+
+function renderResult(data, projectId) {
+  const pane = document.getElementById('result-pane');
+
+  pane.innerHTML = `
+    <!-- Screenshot pane -->
+    <div id="screenshot-pane">
+      <div class="pane-head">
+        <span>📸 Live Preview</span>
+        <span style="font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">Port ${data.port}</span>
+      </div>
+      <div id="screenshot-container">
+        ${data.screenshot
+          ? `<img id="screenshot-img" src="${data.screenshot}?t=${Date.now()}" alt="App Preview" style="display:block;max-width:100%;max-height:100%;border-radius:8px;border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,0.6)"/>`
+          : `<div class="screenshot-placeholder">
+               <div class="placeholder-icon">🖼️</div>
+               <div>Screenshot unavailable</div>
+               <div style="font-size:0.7rem">Open the live link to view your app</div>
+             </div>`
+        }
+      </div>
+    </div>
+
+    <!-- Link pane -->
+    <div id="link-pane">
+      <div class="pane-head">
+        <span>🔗 Live Application</span>
+        <span style="font-family:var(--font-mono);font-size:0.65rem;color:#4ade80"># ${projectId}</span>
+      </div>
+      <div id="link-content">
+        <div class="live-url-card">
+          <div class="live-url-label">🌐 Live URL</div>
+          <div id="live-url-display">${data.url}</div>
+          <div class="url-actions">
+            <a class="btn-open" href="${data.url}" target="_blank" rel="noopener">
+              🚀 Open Live Application
+            </a>
+            <button class="btn-copy" onclick="copyUrl('${data.url}')">📋 Copy</button>
+          </div>
+        </div>
+
+        <div class="code-accordion">
+          <button class="accordion-toggle" onclick="toggleCode(this)">
+            <span>📄 View Generated Code — ${data.filename}</span>
+            <span class="accordion-arrow">▼</span>
+          </button>
+          <div id="code-body">
+            <div id="code-text">${escHtml(data.code || '')}</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--surface);">
+          <div style="font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Project Info</div>
+          <div style="font-family:var(--font-mono);font-size:0.7rem;color:#7a90a4;line-height:2;">
+            <div>ID: <span style="color:var(--text)">${projectId}</span></div>
+            <div>File: <span style="color:var(--text)">${data.filename}</span></div>
+            <div>Port: <span style="color:var(--cyan)">${data.port}</span></div>
+            <div>Lines: <span style="color:var(--text)">${(data.code||'').split('\n').length}</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  pane.classList.add('visible');
+  updateActiveCount();
+}
+
+function hideResultPane() {
+  const pane = document.getElementById('result-pane');
+  pane.classList.remove('visible');
+  pane.innerHTML = `
+    <div id="empty-state" style="grid-column:1/-1">
+      <div class="empty-icon" style="animation:none">
+        <div class="spinner" style="width:40px;height:40px;border-width:3px;"></div>
+      </div>
+      <div class="empty-title">Nexo is Working...</div>
+      <div class="empty-sub">Building your application autonomously. Watch the console for live updates.</div>
+    </div>`;
+  pane.classList.add('visible');
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+function addToHistory(projectId, prompt) {
+  const list = document.getElementById('history-list');
+
+  // Remove "no projects" placeholder
+  const placeholder = list.querySelector('[data-placeholder]');
+  if (placeholder) placeholder.remove();
+  if (!list.querySelector('[data-placeholder]') && list.innerHTML.includes('No projects')) {
+    list.innerHTML = '';
+  }
+
+  const item = document.createElement('div');
+  item.className = 'history-item active';
+  item.dataset.id = projectId;
+  item.innerHTML = `
+    <div class="history-prompt">${escHtml(prompt.slice(0, 55))}${prompt.length > 55 ? '…' : ''}</div>
+    <div class="history-meta">#${projectId} · just now</div>
+  `;
+
+  // Deactivate others
+  list.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
+
+  item.addEventListener('click', () => {
+    list.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    loadProjectResult(projectId);
+  });
+
+  list.prepend(item);
+  updateActiveCount();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function copyUrl(url) {
+  navigator.clipboard.writeText(url).then(() => showToast('✅ URL copied to clipboard!'));
+}
+
+function toggleCode(btn) {
+  const body  = document.getElementById('code-body');
+  const arrow = btn.querySelector('.accordion-arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+function setBtnState(loading) {
+  const btn  = document.getElementById('generate-btn');
+  const icon = document.getElementById('btn-icon');
+  const text = document.getElementById('btn-text');
+  btn.disabled = loading;
+  if (loading) {
+    icon.innerHTML = '<div class="spinner"></div>';
+    text.textContent = 'Generating...';
+  } else {
+    icon.textContent = '⚡';
+    text.textContent = 'Generate via Nexo';
+  }
+}
+
+function setStatus(msg, active) {
+  document.getElementById('status-text').textContent = msg;
+  const dot = document.getElementById('status-dot');
+  dot.style.background = active ? 'var(--amber)' : 'var(--cyan)';
+}
+
+async function updateActiveCount() {
+  try {
+    const res  = await fetch('/projects');
+    const data = await res.json();
+    document.getElementById('active-count').textContent = `${data.length} active server${data.length !== 1 ? 's' : ''}`;
+  } catch (_) {}
+}
+
+// ── Keyboard shortcut ──────────────────────────────────────────────────────
+document.getElementById('prompt-input').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    startGeneration();
+  }
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  updateActiveCount();
+  // Fetch and display model info
+  fetch('/health').then(r => r.json()).then(d => {
+    document.getElementById('model-tag').textContent = d.model;
+  }).catch(() => {});
+});
+</script>
+</body>
+</html>
